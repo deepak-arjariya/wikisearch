@@ -26,9 +26,10 @@ class Article(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     snippet = Column(String, nullable=False)
-    tags = Column(Text, nullable=True) 
+    tags = Column(Text, nullable=True)
+    pageid = Column(Integer)
     def __repr__(self):
-        return f"<Article(id={self.id}, title={self.title}, snippet={self.snippet}, tags={self.tags})>"
+        return f"<Article(id={self.id}, title={self.title}, snippet={self.snippet}, tags={self.tags}, pageid={self.pageid})>"
 
 
 Base.metadata.create_all(bind=engine)
@@ -101,13 +102,14 @@ from pydantic import BaseModel
 class ArticleCreate(BaseModel):
     title: str
     snippet: str
+    pageid: int
 
 @app.post("/articles/")
 def save_article(article: ArticleCreate, db: Session = Depends(get_db)):
     # Use the data in the request body
     tags = generate_tags_from_article(article.snippet)
     tags_json = json.dumps(tags)
-    new_article = Article(title=article.title, snippet=article.snippet, tags=tags_json)
+    new_article = Article(title=article.title, snippet=article.snippet, tags=tags_json, pageid=article.pageid)
     db.add(new_article)
     db.commit()
     db.refresh(new_article)
@@ -141,7 +143,8 @@ def get_saved_articles(db: Session = Depends(get_db)):
             "id": article.id,
             "title": article.title,
             "snippet": article.snippet,
-            "tags": json.loads(article.tags) if article.tags else []
+            "tags": json.loads(article.tags) if article.tags else [],
+            "pageid": article.pageid
         })
     return result
 

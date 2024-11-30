@@ -3,11 +3,6 @@ import axios from "axios";
 import {
   TextField,
   Button,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
   Container,
   Typography,
   Card,
@@ -15,6 +10,7 @@ import {
   CardActions,
   Grid,
   CircularProgress,
+  Link,
 } from "@mui/material";
 import { Save } from "@mui/icons-material";
 
@@ -22,6 +18,7 @@ const Search = () => {
   const [keyword, setKeyword] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [savedArticles, setSavedArticles] = useState(new Set()); // Track saved articles
 
   const handleSearch = async () => {
     setLoading(true);
@@ -42,8 +39,9 @@ const Search = () => {
       await axios.post(`http://127.0.0.1:8000/articles/`, {
         title: article.title,
         snippet: article.snippet,
+        pageid: article.pageid,
       });
-      alert("Article saved!");
+      setSavedArticles((prevSaved) => new Set(prevSaved).add(article.pageid)); // Update saved articles state
     } catch (error) {
       console.error("Error saving article:", error);
     }
@@ -87,7 +85,15 @@ const Search = () => {
               <Card elevation={3}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
-                    {result.title}
+                    <Link
+                      href={`https://en.wikipedia.org/?curid=${result.pageid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      color="inherit"
+                      style={{ textDecoration: "none" }}
+                    >
+                      {result.title}
+                    </Link>
                   </Typography>
                   <Typography
                     variant="body2"
@@ -101,8 +107,9 @@ const Search = () => {
                     color="primary"
                     onClick={() => handleSave(result)}
                     startIcon={<Save />}
+                    disabled={savedArticles.has(result.pageid)} // Disable if already saved
                   >
-                    Save Article
+                    {savedArticles.has(result.pageid) ? "Saved" : "Save Article"}
                   </Button>
                 </CardActions>
               </Card>

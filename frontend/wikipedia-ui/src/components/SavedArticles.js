@@ -9,9 +9,10 @@ import {
   IconButton,
   Chip,
   TextField,
-  Button,
   Grid,
   Box,
+  Link,
+  CircularProgress,
 } from "@mui/material";
 import { Delete, Edit, Save } from "@mui/icons-material";
 
@@ -19,6 +20,7 @@ const SavedArticles = () => {
   const [articles, setArticles] = useState([]);
   const [editingTags, setEditingTags] = useState(null);
   const [newTags, setNewTags] = useState("");
+  const [loading, setLoading] = useState({ delete: null, saveTags: null });
 
   const fetchSavedArticles = async () => {
     try {
@@ -30,26 +32,30 @@ const SavedArticles = () => {
   };
 
   const handleDelete = async (id) => {
+    setLoading((prev) => ({ ...prev, delete: id }));
     try {
       await axios.delete(`http://127.0.0.1:8000/articles/${id}/`);
-      alert("Article deleted!");
       fetchSavedArticles();
     } catch (error) {
       console.error("Error deleting article:", error);
+    } finally {
+      setLoading((prev) => ({ ...prev, delete: null }));
     }
   };
 
   const handleSaveTags = async (id) => {
+    setLoading((prev) => ({ ...prev, saveTags: id }));
     try {
       const updatedTags = newTags.split(",").map((tag) => tag.trim());
       await axios.put(`http://127.0.0.1:8000/articles/${id}/`, {
         tags: updatedTags,
       });
-      alert("Tags updated successfully!");
-      setEditingTags(null);
       fetchSavedArticles();
     } catch (error) {
       console.error("Error updating tags:", error);
+    } finally {
+      setLoading((prev) => ({ ...prev, saveTags: null }));
+      setEditingTags(null);
     }
   };
 
@@ -68,7 +74,16 @@ const SavedArticles = () => {
             <Card elevation={3} sx={{ borderRadius: 3 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  {article.title}
+                  {/* Link to the Wikipedia page */}
+                  <Link
+                    href={`https://en.wikipedia.org/?curid=${article.pageid}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    color="inherit"
+                    style={{ textDecoration: "none" }}
+                  >
+                    {article.title}
+                  </Link>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   {article.snippet}
@@ -99,8 +114,13 @@ const SavedArticles = () => {
                     <IconButton
                       color="primary"
                       onClick={() => handleSaveTags(article.id)}
+                      disabled={loading.saveTags === article.id} // Disable while saving
                     >
-                      <Save />
+                      {loading.saveTags === article.id ? (
+                        <CircularProgress size={24} />
+                      ) : (
+                        <Save />
+                      )}
                     </IconButton>
                   </>
                 ) : (
@@ -117,8 +137,13 @@ const SavedArticles = () => {
                     <IconButton
                       color="error"
                       onClick={() => handleDelete(article.id)}
+                      disabled={loading.delete === article.id} // Disable while deleting
                     >
-                      <Delete />
+                      {loading.delete === article.id ? (
+                        <CircularProgress size={24} />
+                      ) : (
+                        <Delete />
+                      )}
                     </IconButton>
                   </>
                 )}
