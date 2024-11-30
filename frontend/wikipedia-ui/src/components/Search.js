@@ -27,22 +27,22 @@ const Search = () => {
   const [apiMessage, setApiMessage] = useState(""); // Track API message
   const [openSnackbar, setOpenSnackbar] = useState(false); // Snackbar visibility state
 
-  // Store search keyword in localStorage or sessionStorage if it exists
+  // Use useEffect to fetch the search keyword from localStorage and initiate search after login
   useEffect(() => {
-    const storedKeyword = localStorage.getItem("searchKeyword");
-    if (storedKeyword) {
-      setKeyword(storedKeyword);
+    if (isAuthenticated) {
+      const storedKeyword = localStorage.getItem("searchKeyword");
+      if (storedKeyword) {
+        setKeyword(storedKeyword);
+        handleSearch(storedKeyword); // Trigger search after login
+      }
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  const handleSearch = async () => {
-    // Save the keyword to localStorage before redirecting to login
-    localStorage.setItem("searchKeyword", keyword);
-    
+  const handleSearch = async (searchKeyword) => {
     setLoading(true);
     try {
       const response = await axios.get(`http://127.0.0.1:8000/search/`, {
-        params: { keyword },
+        params: { keyword: searchKeyword },
       });
       setResults(response.data);
     } catch (error) {
@@ -70,6 +70,13 @@ const Search = () => {
     }
   };
 
+  // Handle keyword change and trigger search
+  const handleKeywordChange = (e) => {
+    const newKeyword = e.target.value;
+    setKeyword(newKeyword);
+    localStorage.setItem("searchKeyword", newKeyword); // Save the keyword to localStorage
+  };
+
   return (
     <Container maxWidth="md" sx={{ mt: 4 }}>
       <Typography variant="h4" align="center" gutterBottom>
@@ -81,7 +88,7 @@ const Search = () => {
             label="Search Wikipedia"
             fullWidth
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={handleKeywordChange}
             variant="outlined"
             placeholder="Type a keyword (e.g., AI, History)"
           />
@@ -90,7 +97,7 @@ const Search = () => {
           <Button
             variant="contained"
             color="primary"
-            onClick={handleSearch}
+            onClick={() => handleSearch(keyword)} // Trigger search on button click
             fullWidth
             disabled={!keyword || loading}
           >
