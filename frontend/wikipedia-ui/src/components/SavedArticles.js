@@ -59,6 +59,11 @@ const SavedArticles = () => {
     }
   };
 
+  const stripHtmlTags = (html) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc.body.textContent || "";
+  };
+
   useEffect(() => {
     fetchSavedArticles();
   }, []);
@@ -70,7 +75,7 @@ const SavedArticles = () => {
       </Typography>
       <Grid container spacing={3}>
         {articles.map((article) => (
-          <Grid item xs={12} md={6} key={article.id}>
+          <Grid item xs={12} md={6} key={article.pageid}>
             <Card elevation={3} sx={{ borderRadius: 3 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -86,7 +91,7 @@ const SavedArticles = () => {
                   </Link>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  {article.snippet}
+                  {stripHtmlTags(article.snippet)} {/* Display snippet as plain text */}
                 </Typography>
                 <Box mt={1}>
                   {article.tags.map((tag, index) => (
@@ -101,7 +106,7 @@ const SavedArticles = () => {
                 </Box>
               </CardContent>
               <CardActions>
-                {editingTags === article.id ? (
+                {editingTags === article.pageid ? (
                   <>
                     <TextField
                       value={newTags}
@@ -113,10 +118,10 @@ const SavedArticles = () => {
                     />
                     <IconButton
                       color="primary"
-                      onClick={() => handleSaveTags(article.id)}
-                      disabled={loading.saveTags === article.id} // Disable while saving
+                      onClick={() => handleSaveTags(article.pageid)}
+                      disabled={loading.saveTags === article.pageid} // Disable while saving
                     >
-                      {loading.saveTags === article.id ? (
+                      {loading.saveTags === article.pageid ? (
                         <CircularProgress size={24} />
                       ) : (
                         <Save />
@@ -128,7 +133,7 @@ const SavedArticles = () => {
                     <IconButton
                       color="primary"
                       onClick={() => {
-                        setEditingTags(article.id);
+                        setEditingTags(article.pageid);
                         setNewTags(article.tags.join(", "));
                       }}
                     >
@@ -136,10 +141,10 @@ const SavedArticles = () => {
                     </IconButton>
                     <IconButton
                       color="error"
-                      onClick={() => handleDelete(article.id)}
-                      disabled={loading.delete === article.id} // Disable while deleting
+                      onClick={() => handleDelete(article.pageid)}
+                      disabled={loading.delete === article.pageid} // Disable while deleting
                     >
-                      {loading.delete === article.id ? (
+                      {loading.delete === article.pageid ? (
                         <CircularProgress size={24} />
                       ) : (
                         <Delete />

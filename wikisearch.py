@@ -23,13 +23,12 @@ openai.api_key = "sk-proj-3xz09yfQ7k3Bp3k7AGfWnQheWrytBsvvk9fIzdvoSbr_YDAPvcfFXM
 # Define Article Model
 class Article(Base):
     __tablename__ = "articles"
-    id = Column(Integer, primary_key=True, index=True)
+    pageid = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     snippet = Column(String, nullable=False)
     tags = Column(Text, nullable=True)
-    pageid = Column(Integer)
     def __repr__(self):
-        return f"<Article(id={self.id}, title={self.title}, snippet={self.snippet}, tags={self.tags}, pageid={self.pageid})>"
+        return f"<Article(pageid={self.pageid},title={self.title}, snippet={self.snippet}, tags={self.tags})>"
 
 
 Base.metadata.create_all(bind=engine)
@@ -106,7 +105,9 @@ class ArticleCreate(BaseModel):
 
 @app.post("/articles/")
 def save_article(article: ArticleCreate, db: Session = Depends(get_db)):
-    # Use the data in the request body
+    existing_article = db.query(Article).filter(Article.pageid == article.pageid).first()
+    if existing_article:
+        return {"message": f"Article '{existing_article.title}' already exists in your saved articles.", "article": existing_article}
     tags = generate_tags_from_article(article.snippet)
     tags_json = json.dumps(tags)
     new_article = Article(title=article.title, snippet=article.snippet, tags=tags_json, pageid=article.pageid)
@@ -116,6 +117,7 @@ def save_article(article: ArticleCreate, db: Session = Depends(get_db)):
     return {"message": "Article saved successfully", "article": new_article}
 
 
+
 from typing import List
 
 class UpdateArticleTags(BaseModel):
@@ -123,7 +125,7 @@ class UpdateArticleTags(BaseModel):
 
 @app.put("/articles/{article_id}/")
 def update_article(article_id: int, request: UpdateArticleTags, db: Session = Depends(get_db)):
-    article = db.query(Article).filter(Article.id == article_id).first()
+    article = db.query(Article).filter(Article.pageid == article_id).first()
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     
@@ -140,18 +142,17 @@ def get_saved_articles(db: Session = Depends(get_db)):
     result = []
     for article in articles:
         result.append({
-            "id": article.id,
+            "pageid": article.pageid,
             "title": article.title,
             "snippet": article.snippet,
-            "tags": json.loads(article.tags) if article.tags else [],
-            "pageid": article.pageid
+            "tags": json.loads(article.tags) if article.tags else []
         })
     return result
 
 # Delete Article Endpoint
 @app.delete("/articles/{article_id}/")
 def delete_article(article_id: int, db: Session = Depends(get_db)):
-    article = db.query(Article).filter(Article.id == article_id).first()
+    article = db.query(Article).filter(Article.pageid == article_id).first()
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
     db.delete(article)
