@@ -11,6 +11,8 @@ import {
   Grid,
   CircularProgress,
   Link,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { Save } from "@mui/icons-material";
 
@@ -19,6 +21,8 @@ const Search = () => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [savedArticles, setSavedArticles] = useState(new Set()); // Track saved articles
+  const [apiMessage, setApiMessage] = useState(""); // Track the API message
+  const [openSnackbar, setOpenSnackbar] = useState(false); // Snackbar visibility state
 
   const handleSearch = async () => {
     setLoading(true);
@@ -36,14 +40,21 @@ const Search = () => {
 
   const handleSave = async (article) => {
     try {
-      await axios.post(`http://127.0.0.1:8000/articles/`, {
+      const response = await axios.post(`http://127.0.0.1:8000/articles/`, {
         title: article.title,
         snippet: article.snippet,
         pageid: article.pageid,
       });
+
+      // Get the API message and update the state
+      setApiMessage(response.data.message);
+      setOpenSnackbar(true);
+
       setSavedArticles((prevSaved) => new Set(prevSaved).add(article.pageid)); // Update saved articles state
     } catch (error) {
       console.error("Error saving article:", error);
+      setApiMessage("Error saving article");
+      setOpenSnackbar(true);
     }
   };
 
@@ -123,6 +134,21 @@ const Search = () => {
           </Typography>
         )
       )}
+
+      {/* Snackbar for displaying the API message */}
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={6000}
+        onClose={() => setOpenSnackbar(false)}
+      >
+        <Alert
+          onClose={() => setOpenSnackbar(false)}
+          severity={apiMessage === "Error saving article" ? "error" : "success"}
+          sx={{ width: "100%" }}
+        >
+          {apiMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

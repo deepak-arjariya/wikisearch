@@ -13,6 +13,8 @@ import {
   Box,
   Link,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { Delete, Edit, Save } from "@mui/icons-material";
 
@@ -21,6 +23,8 @@ const SavedArticles = () => {
   const [editingTags, setEditingTags] = useState(null);
   const [newTags, setNewTags] = useState("");
   const [loading, setLoading] = useState({ delete: null, saveTags: null });
+  const [apiMessage, setApiMessage] = useState(""); // Message to show in Snackbar
+  const [openSnackbar, setOpenSnackbar] = useState(false); // Control Snackbar visibility
 
   const fetchSavedArticles = async () => {
     try {
@@ -35,9 +39,13 @@ const SavedArticles = () => {
     setLoading((prev) => ({ ...prev, delete: id }));
     try {
       await axios.delete(`http://127.0.0.1:8000/articles/${id}/`);
+      setApiMessage("Article deleted successfully");
+      setOpenSnackbar(true);
       fetchSavedArticles();
     } catch (error) {
       console.error("Error deleting article:", error);
+      setApiMessage("Error deleting article");
+      setOpenSnackbar(true);
     } finally {
       setLoading((prev) => ({ ...prev, delete: null }));
     }
@@ -50,9 +58,13 @@ const SavedArticles = () => {
       await axios.put(`http://127.0.0.1:8000/articles/${id}/`, {
         tags: updatedTags,
       });
+      setApiMessage("Tags updated successfully");
+      setOpenSnackbar(true);
       fetchSavedArticles();
     } catch (error) {
       console.error("Error updating tags:", error);
+      setApiMessage("Error updating tags");
+      setOpenSnackbar(true);
     } finally {
       setLoading((prev) => ({ ...prev, saveTags: null }));
       setEditingTags(null);
@@ -157,6 +169,21 @@ const SavedArticles = () => {
           </Grid>
         ))}
       </Grid>
+
+      {/* Snackbar for displaying the API message */}
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={6000}
+        onClose={() => setOpenSnackbar(false)}
+      >
+        <Alert
+          onClose={() => setOpenSnackbar(false)}
+          severity={apiMessage.includes("Error") ? "error" : "success"}
+          sx={{ width: "100%" }}
+        >
+          {apiMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
