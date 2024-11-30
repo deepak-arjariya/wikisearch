@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
   TextField,
@@ -15,16 +15,30 @@ import {
   Alert,
 } from "@mui/material";
 import { Save } from "@mui/icons-material";
+import { useAuth0 } from "@auth0/auth0-react"; // Import the useAuth0 hook
 
 const Search = () => {
-  const [keyword, setKeyword] = useState("");
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const { isAuthenticated, loginWithRedirect, logout, user } = useAuth0(); // Get authentication status and login function
+
+  const [keyword, setKeyword] = useState(""); // Keyword for search
+  const [results, setResults] = useState([]); // Search results
+  const [loading, setLoading] = useState(false); // Loading state
   const [savedArticles, setSavedArticles] = useState(new Set()); // Track saved articles
-  const [apiMessage, setApiMessage] = useState(""); // Track the API message
+  const [apiMessage, setApiMessage] = useState(""); // Track API message
   const [openSnackbar, setOpenSnackbar] = useState(false); // Snackbar visibility state
 
+  // Store search keyword in localStorage or sessionStorage if it exists
+  useEffect(() => {
+    const storedKeyword = localStorage.getItem("searchKeyword");
+    if (storedKeyword) {
+      setKeyword(storedKeyword);
+    }
+  }, []);
+
   const handleSearch = async () => {
+    // Save the keyword to localStorage before redirecting to login
+    localStorage.setItem("searchKeyword", keyword);
+    
     setLoading(true);
     try {
       const response = await axios.get(`http://127.0.0.1:8000/search/`, {
@@ -46,10 +60,8 @@ const Search = () => {
         pageid: article.pageid,
       });
 
-      // Get the API message and update the state
       setApiMessage(response.data.message);
       setOpenSnackbar(true);
-
       setSavedArticles((prevSaved) => new Set(prevSaved).add(article.pageid)); // Update saved articles state
     } catch (error) {
       console.error("Error saving article:", error);
@@ -113,15 +125,26 @@ const Search = () => {
                   />
                 </CardContent>
                 <CardActions>
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    onClick={() => handleSave(result)}
-                    startIcon={<Save />}
-                    disabled={savedArticles.has(result.pageid)} // Disable if already saved
-                  >
-                    {savedArticles.has(result.pageid) ? "Saved" : "Save Article"}
-                  </Button>
+                  {/* Conditionally render button based on user authentication */}
+                  {isAuthenticated ? (
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={() => handleSave(result)}
+                      startIcon={<Save />}
+                      disabled={savedArticles.has(result.pageid)} // Disable if already saved
+                    >
+                      {savedArticles.has(result.pageid) ? "Saved" : "Save Article"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      onClick={() => loginWithRedirect()} // Redirect to login page on click
+                    >
+                      Log in to Save
+                    </Button>
+                  )}
                 </CardActions>
               </Card>
             </Grid>
