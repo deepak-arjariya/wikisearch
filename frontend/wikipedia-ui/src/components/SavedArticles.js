@@ -17,21 +17,40 @@ import {
   Alert,
 } from "@mui/material";
 import { Delete, Edit, Save } from "@mui/icons-material";
+import { useAuth0 } from "@auth0/auth0-react";
 
 const SavedArticles = () => {
+  const { loginWithRedirect, logout, user, isAuthenticated, getAccessTokenSilently } = useAuth0();
   const [articles, setArticles] = useState([]);
   const [editingTags, setEditingTags] = useState(null);
   const [newTags, setNewTags] = useState("");
-  const [loading, setLoading] = useState({ delete: null, saveTags: null });
+  const [loading, setLoading] = useState({ delete: null, saveTags: null, fetch: false });
   const [apiMessage, setApiMessage] = useState(""); // Message to show in Snackbar
   const [openSnackbar, setOpenSnackbar] = useState(false); // Control Snackbar visibility
 
+  // Fetch saved articles only if the user is authenticated
   const fetchSavedArticles = async () => {
+    setLoading((prev) => ({ ...prev, fetch: true }));
+    if (!isAuthenticated) {
+      setApiMessage("Please log in to view saved articles.");
+      setOpenSnackbar(true);
+      setLoading((prev) => ({ ...prev, fetch: false }));
+      return;
+    }
     try {
-      const response = await axios.get(`http://127.0.0.1:8000/articles/`);
+      const token = await getAccessTokenSilently();
+      const response = await axios.get(`http://127.0.0.1:8000/articles/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setArticles(response.data);
     } catch (error) {
       console.error("Error fetching saved articles:", error);
+      setApiMessage("Error fetching saved articles");
+      setOpenSnackbar(true);
+    } finally {
+      setLoading((prev) => ({ ...prev, fetch: false }));
     }
   };
 
@@ -61,13 +80,14 @@ const SavedArticles = () => {
       setApiMessage("Tags updated successfully");
       setOpenSnackbar(true);
       fetchSavedArticles();
+      setNewTags(""); // Clear the tags input after saving
+      setEditingTags(null); // Exit editing mode
     } catch (error) {
       console.error("Error updating tags:", error);
       setApiMessage("Error updating tags");
       setOpenSnackbar(true);
     } finally {
       setLoading((prev) => ({ ...prev, saveTags: null }));
-      setEditingTags(null);
     }
   };
 
@@ -77,98 +97,113 @@ const SavedArticles = () => {
   };
 
   useEffect(() => {
-    fetchSavedArticles();
-  }, []);
+    if (isAuthenticated) {
+      fetchSavedArticles();
+    }
+  }, [isAuthenticated]);
 
   return (
     <Container maxWidth="md" sx={{ mt: 4 }}>
       <Typography variant="h4" gutterBottom align="center">
         Saved Articles
       </Typography>
-      <Grid container spacing={3}>
-        {articles.map((article) => (
-          <Grid item xs={12} md={6} key={article.pageid}>
-            <Card elevation={3} sx={{ borderRadius: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {/* Link to the Wikipedia page */}
-                  <Link
-                    href={`https://en.wikipedia.org/?curid=${article.pageid}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    color="inherit"
-                    style={{ textDecoration: "none" }}
-                  >
-                    {article.title}
-                  </Link>
-                </Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  {stripHtmlTags(article.snippet)} {/* Display snippet as plain text */}
-                </Typography>
-                <Box mt={1}>
-                  {article.tags.map((tag, index) => (
-                    <Chip
-                      key={index}
-                      label={tag}
-                      color="primary"
-                      size="small"
-                      sx={{ mr: 1, mb: 1 }}
-                    />
-                  ))}
-                </Box>
-              </CardContent>
-              <CardActions>
-                {editingTags === article.pageid ? (
-                  <>
-                    <TextField
-                      value={newTags}
-                      onChange={(e) => setNewTags(e.target.value)}
-                      placeholder="Comma-separated tags"
-                      variant="outlined"
-                      size="small"
-                      sx={{ flexGrow: 1 }}
-                    />
-                    <IconButton
-                      color="primary"
-                      onClick={() => handleSaveTags(article.pageid)}
-                      disabled={loading.saveTags === article.pageid} // Disable while saving
-                    >
-                      {loading.saveTags === article.pageid ? (
-                        <CircularProgress size={24} />
-                      ) : (
-                        <Save />
-                      )}
-                    </IconButton>
-                  </>
-                ) : (
-                  <>
-                    <IconButton
-                      color="primary"
-                      onClick={() => {
-                        setEditingTags(article.pageid);
-                        setNewTags(article.tags.join(", "));
-                      }}
-                    >
-                      <Edit />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(article.pageid)}
-                      disabled={loading.delete === article.pageid} // Disable while deleting
-                    >
-                      {loading.delete === article.pageid ? (
-                        <CircularProgress size={24} />
-                      ) : (
-                        <Delete />
-                      )}
-                    </IconButton>
-                  </>
-                )}
-              </CardActions>
-            </Card>
+      {!isAuthenticated ? (
+        <Box textAlign="center">
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            Please log in to view saved articles.
+          </Typography>
+          <IconButton color="primary" onClick={() => loginWithRedirect()}>
+            Log in with Auth0
+          </IconButton>
+        </Box>
+      ) : (
+        <>
+          <Grid container spacing={3}>
+            {articles.map((article) => (
+              <Grid item xs={12} md={6} key={article.pageid}>
+                <Card elevation={3} sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      {/* Link to the Wikipedia page */}
+                      <Link
+                        href={`https://en.wikipedia.org/?curid=${article.pageid}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        color="inherit"
+                        style={{ textDecoration: "none" }}
+                      >
+                        {article.title}
+                      </Link>
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      {stripHtmlTags(article.snippet)} {/* Display snippet as plain text */}
+                    </Typography>
+                    <Box mt={1}>
+                      {article.tags.map((tag, index) => (
+                        <Chip
+                          key={index}
+                          label={tag}
+                          color="primary"
+                          size="small"
+                          sx={{ mr: 1, mb: 1 }}
+                        />
+                      ))}
+                    </Box>
+                  </CardContent>
+                  <CardActions>
+                    {editingTags === article.pageid ? (
+                      <>
+                        <TextField
+                          value={newTags}
+                          onChange={(e) => setNewTags(e.target.value)}
+                          placeholder="Comma-separated tags"
+                          variant="outlined"
+                          size="small"
+                          sx={{ flexGrow: 1 }}
+                        />
+                        <IconButton
+                          color="primary"
+                          onClick={() => handleSaveTags(article.pageid)}
+                          disabled={loading.saveTags === article.pageid} // Disable while saving
+                        >
+                          {loading.saveTags === article.pageid ? (
+                            <CircularProgress size={24} />
+                          ) : (
+                            <Save />
+                          )}
+                        </IconButton>
+                      </>
+                    ) : (
+                      <>
+                        <IconButton
+                          color="primary"
+                          onClick={() => {
+                            setEditingTags(article.pageid);
+                            setNewTags(article.tags.join(", "));
+                          }}
+                        >
+                          <Edit />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleDelete(article.pageid)}
+                          disabled={loading.delete === article.pageid} // Disable while deleting
+                        >
+                          {loading.delete === article.pageid ? (
+                            <CircularProgress size={24} />
+                          ) : (
+                            <Delete />
+                          )}
+                        </IconButton>
+                      </>
+                    )}
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
           </Grid>
-        ))}
-      </Grid>
+        </>
+      )}
 
       {/* Snackbar for displaying the API message */}
       <Snackbar

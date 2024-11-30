@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Route, Routes, Link, Navigate } from "react-router-dom";
+import { useAuth0 } from "@auth0/auth0-react";
 import Search from "./components/Search";
 import SavedArticles from "./components/SavedArticles";
 import {
@@ -28,6 +29,23 @@ const theme = createTheme({
 });
 
 const App = () => {
+  const { loginWithRedirect, logout, isAuthenticated, isLoading, user } = useAuth0();
+
+  // We no longer need the isRedirecting state to handle automatic login redirection
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    // If the user is authenticated, we stop the redirect
+    if (!isLoading && isAuthenticated) {
+      setIsRedirecting(false);
+    }
+  }, [isAuthenticated, isLoading]);
+
+  // Show loading spinner while the authentication status is being determined
+  if (isLoading || isRedirecting) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -48,17 +66,22 @@ const App = () => {
               >
                 Discover and Save Wikipedia Gems
               </Typography>
-              <Button
-                color="inherit"
-                component={Link}
-                to="/"
-                sx={{
-                  fontWeight: "bold",
-                  "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
-                }}
-              >
-                Home
-              </Button>
+
+              {/* Display 'Hi [user's name]' if authenticated */}
+              {isAuthenticated && user && (
+                <Typography
+                  variant="body1"
+                  sx={{
+                    fontWeight: "bold",
+                    color: "white",
+                    mr: 2,
+                    display: "inline-block",
+                  }}
+                >
+                  Hi, {user.name}
+                </Typography>
+              )}
+
               <Button
                 color="inherit"
                 component={Link}
@@ -70,26 +93,58 @@ const App = () => {
               >
                 Search
               </Button>
-              <Button
-                color="inherit"
-                component={Link}
-                to="/saved"
-                sx={{
-                  fontWeight: "bold",
-                  "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
-                }}
-              >
-                Saved Articles
-              </Button>
+              {/* Show 'Saved Articles' only if user is authenticated */}
+              {isAuthenticated && (
+                <Button
+                  color="inherit"
+                  component={Link}
+                  to="/saved"
+                  sx={{
+                    fontWeight: "bold",
+                    "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
+                  }}
+                >
+                  Saved Articles
+                </Button>
+              )}
+              {isAuthenticated ? (
+                <Button
+                  color="inherit"
+                  onClick={() => logout({ returnTo: window.location.origin })}
+                  sx={{
+                    fontWeight: "bold",
+                    "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
+                  }}
+                >
+                  Log Out
+                </Button>
+              ) : (
+                <Button
+                  color="inherit"
+                  onClick={() => loginWithRedirect()} // Trigger login redirect only on button click
+                  sx={{
+                    fontWeight: "bold",
+                    "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
+                  }}
+                >
+                  Log In
+                </Button>
+              )}
             </Toolbar>
           </AppBar>
 
           <Container sx={{ mt: 4, flexGrow: 1 }}>
+            {/* Routes for authenticated users */}
             <Routes>
-              {/* Redirect to /search when the user accesses the home path */}
               <Route path="/" element={<Navigate to="/search" />} />
               <Route path="/search" element={<Search />} />
-              <Route path="/saved" element={<SavedArticles />} />
+              {/* Show SavedArticles page only if authenticated */}
+              <Route
+                path="/saved"
+                element={
+                  isAuthenticated ? <SavedArticles /> : <Navigate to="/search" />
+                }
+              />
             </Routes>
           </Container>
 
