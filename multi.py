@@ -7,7 +7,7 @@ import requests
 from pydantic import BaseModel
 
 # Configuration for CockroachDB
-DATABASE_URL = "postgresql://deepakarjairya:zOCVe9BX4_8e1vdOOmO43g@wikidb-5624.j77.aws-ap-south-1.cockroachlabs.cloud:26257/defaultdb?sslmode=verify-full"
+DATABASE_URL = "postgresql://deepakarjairya:zOCVe9BX4_8e1vdOOmO43g@wikidb-5624.j77.aws-ap-south-1.cockroachlabs.cloud:26257/wikisearch?sslmode=verify-full"
 
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
