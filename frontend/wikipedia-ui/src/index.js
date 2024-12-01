@@ -16,7 +16,7 @@ root.render(
     <Auth0Provider
       domain={domain}
       clientId={clientId}
-      authorizationParams={{ redirect_uri: 'https://f3d3-183-83-53-28.ngrok-free.app' }} // Redirect URI after login
+      authorizationParams={{ redirect_uri: 'https://5e1a-183-83-52-94.ngrok-free.app' }} // Redirect URI after login
     >
       <CssBaseline />
       <App />

@@ -39,7 +39,7 @@ const SavedArticles = () => {
     }
     try {
       const token = await getAccessTokenSilently();
-      const response = await axios.get(`http://127.0.0.1:8000/articles/`, {
+      const response = await axios.get(`http://127.0.0.1:8000/articles/${user?.sub}/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -57,7 +57,14 @@ const SavedArticles = () => {
   const handleDelete = async (id) => {
     setLoading((prev) => ({ ...prev, delete: id }));
     try {
-      await axios.delete(`http://127.0.0.1:8000/articles/${id}/`);
+      const token = await getAccessTokenSilently();
+      console.log("++++++++++++++++++++++++++++++++++++++++++")
+      console.log(`${user?.sub}`)
+      await axios.delete(`http://127.0.0.1:8000/articles/${user?.sub}/${id}/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setApiMessage("Article deleted successfully");
       setOpenSnackbar(true);
       fetchSavedArticles();
@@ -73,10 +80,17 @@ const SavedArticles = () => {
   const handleSaveTags = async (id) => {
     setLoading((prev) => ({ ...prev, saveTags: id }));
     try {
+      const token = await getAccessTokenSilently();
       const updatedTags = newTags.split(",").map((tag) => tag.trim());
-      await axios.put(`http://127.0.0.1:8000/articles/${id}/`, {
-        tags: updatedTags,
-      });
+      await axios.put(
+        `http://127.0.0.1:8000/articles/${id}/`,
+        { tags: updatedTags, user_id: user?.sub },  // Send user_id along with tags
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       setApiMessage("Tags updated successfully");
       setOpenSnackbar(true);
       fetchSavedArticles();

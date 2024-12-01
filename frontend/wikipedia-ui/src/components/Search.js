@@ -53,12 +53,27 @@ const Search = () => {
   };
 
   const handleSave = async (article) => {
+    if (!isAuthenticated) {
+      setApiMessage("Please log in to save articles.");
+      setOpenSnackbar(true);
+      return;
+    }
+
     try {
-      const response = await axios.post(`http://127.0.0.1:8000/articles/`, {
-        title: article.title,
-        snippet: article.snippet,
-        pageid: article.pageid,
-      });
+      const response = await axios.post(
+        `http://127.0.0.1:8000/articles/`,
+        {
+          title: article.title,
+          snippet: article.snippet,
+          pageid: article.pageid,
+          user_id: user?.sub, // Include the user ID (from Auth0's `sub` field)
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${user?.accessToken}`, // Include the Auth0 token
+          },
+        }
+      );
 
       setApiMessage(response.data.message);
       setOpenSnackbar(true);
@@ -132,7 +147,6 @@ const Search = () => {
                   />
                 </CardContent>
                 <CardActions>
-                  {/* Conditionally render button based on user authentication */}
                   {isAuthenticated ? (
                     <Button
                       variant="outlined"
@@ -173,7 +187,7 @@ const Search = () => {
       >
         <Alert
           onClose={() => setOpenSnackbar(false)}
-          severity={apiMessage === "Error saving article" ? "error" : "success"}
+          severity={apiMessage.includes("Error") ? "error" : "success"}
           sx={{ width: "100%" }}
         >
           {apiMessage}

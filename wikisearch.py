@@ -51,24 +51,24 @@ def generate_tags_from_article(content: str):
     # Create a prompt for the LLM to extract tags
 
     return ["knowledge", "testing"]
-    prompt = f"Extract relevant categories or tags for the following article:\n\n{content}\n\nTags:"
+    # prompt = f"Extract relevant categories or tags for the following article:\n\n{content}\n\nTags:"
     
-    # Call the OpenAI API to generate tags
-    response = openai.chat.completions.create(
-        model="davinci-002",  # You can use gpt-3.5 or gpt-4 depending on your quota
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=50,
-        temperature=0.7
-    )
+    # # Call the OpenAI API to generate tags
+    # response = openai.chat.completions.create(
+    #     model="davinci-002",  # You can use gpt-3.5 or gpt-4 depending on your quota
+    #     messages=[
+    #         {"role": "system", "content": "You are a helpful assistant."},
+    #         {"role": "user", "content": prompt},
+    #     ],
+    #     max_tokens=50,
+    #     temperature=0.7
+    # )
     
-    # Extract the tags from the LLM response
-    tags = response['choices'][0]['message']['content'].strip().split(',')
+    # # Extract the tags from the LLM response
+    # tags = response['choices'][0]['message']['content'].strip().split(',')
 
 
-    return [tag.strip() for tag in tags]
+    # return [tag.strip() for tag in tags]
 
 
 # Dependency to get DB session
