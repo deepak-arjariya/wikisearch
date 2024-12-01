@@ -41,7 +41,7 @@ const Search = () => {
   const handleSearch = async (searchKeyword) => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://127.0.0.1:8000/search/`, {
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/search/`, {
         params: { keyword: searchKeyword },
       });
       setResults(response.data);
@@ -61,7 +61,7 @@ const Search = () => {
 
     try {
       const response = await axios.post(
-        `http://127.0.0.1:8000/articles/`,
+        `${process.env.REACT_APP_BACKEND_URL}/articles/`,
         {
           title: article.title,
           snippet: article.snippet,

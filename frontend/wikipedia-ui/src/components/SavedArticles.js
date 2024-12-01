@@ -39,7 +39,7 @@ const SavedArticles = () => {
     }
     try {
       const token = await getAccessTokenSilently();
-      const response = await axios.get(`http://127.0.0.1:8000/articles/${user?.sub}/`, {
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/articles/${user?.sub}/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -60,7 +60,7 @@ const SavedArticles = () => {
       const token = await getAccessTokenSilently();
       console.log("++++++++++++++++++++++++++++++++++++++++++")
       console.log(`${user?.sub}`)
-      await axios.delete(`http://127.0.0.1:8000/articles/${user?.sub}/${id}/`, {
+      await axios.delete(`${process.env.REACT_APP_BACKEND_URL}/articles/${user?.sub}/${id}/`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -83,7 +83,7 @@ const SavedArticles = () => {
       const token = await getAccessTokenSilently();
       const updatedTags = newTags.split(",").map((tag) => tag.trim());
       await axios.put(
-        `http://127.0.0.1:8000/articles/${id}/`,
+        `${process.env.REACT_APP_BACKEND_URL}/articles/${id}/`,
         { tags: updatedTags, user_id: user?.sub },  // Send user_id along with tags
         {
           headers: {

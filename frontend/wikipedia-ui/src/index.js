@@ -6,8 +6,10 @@ import { CssBaseline } from "@mui/material";
 import { Auth0Provider } from "@auth0/auth0-react";
 
 // Replace these values with your Auth0 Domain and Client ID
-const domain = "dev-vvk6ffsi4ip5unr2.us.auth0.com"; // e.g., dev-12345.us.auth0.com
-const clientId = "lCHqmMCTaJcws0m5hlCxeh9A66hNw23Z"; // e.g., your-client-id
+
+const domain = process.env.REACT_APP_AUTH_DOMAIN
+const clientId = process.env.REACT_APP_AUTH_CLIENT_ID
+const redirectUri = process.env.REACT_APP_AUTH_REDIRECT_URI
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
@@ -16,7 +18,7 @@ root.render(
     <Auth0Provider
       domain={domain}
       clientId={clientId}
-      authorizationParams={{ redirect_uri: 'https://5e1a-183-83-52-94.ngrok-free.app' }} // Redirect URI after login
+      authorizationParams={{ redirect_uri: redirectUri }} // Redirect URI after login
     >
       <CssBaseline />
       <App />
