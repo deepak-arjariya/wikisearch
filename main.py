@@ -1,70 +1,259 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket
-from fastapi_users import FastAPIUsers, UserManager
-from fastapi_users.db import SQLAlchemyUserDatabase
-from sqlalchemy import Column, String, Integer, create_engine, ForeignKey, Table, Text
-from sqlalchemy.ext.declarative import DeclarativeMeta, declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
+import psycopg2
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
+import json
+import os
 import requests
-from langchain.chat_models import ChatOpenAI
-from gemini_pro import GeminiPro
+from pydantic import BaseModel
+import google.generativeai as genai
 
-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
-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
-DATABASE_URL = "cockroachdb://<username>:<password>@<cluster>/<db_name>?sslmode=require"
-engine = create_engine(DATABASE_URL)
-Base: DeclarativeMeta = declarative_base()
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+genai.configure(api_key=os.getenv('GENAI_KEY', ""))
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-# User Model
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
 
-# Article Model
-class Article(Base):
-    __tablename__ = "articles"
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    snippet = Column(Text, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    tags = Column(Text)
+DATABASE_URL = os.getenv('DATABASE_URL', "")
+
+
+conn = psycopg2.connect(DATABASE_URL)
+cursor = conn.cursor()
+
+create_users_table = """
+CREATE TABLE IF NOT EXISTS users (
+    id STRING PRIMARY KEY,
+    name STRING
+);
+"""
+
+create_articles_table = """
+CREATE TABLE IF NOT EXISTS articles (
+    id SERIAL PRIMARY KEY,
+    title STRING NOT NULL,
+    snippet STRING NOT NULL,
+    tags STRING,
+    pageid INT NOT NULL,
+    owner_id STRING REFERENCES users(id),
+    UNIQUE (pageid, owner_id)
+);
+"""
+
+
+cursor.execute(create_users_table)
+cursor.execute(create_articles_table)
+
+
+conn.commit()
+cursor.close()
+conn.close()
+
+print("Tables created successfully.")
+
 
 app = FastAPI()
 
-# Wikipedia Search Endpoint
-@app.get("/search/")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def get_db():
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    return conn, cursor
+
+
+def close_db(conn, cursor):
+    cursor.close()
+    conn.close()
+
+
+class ArticleCreate(BaseModel):
+    title: str
+    snippet: str
+    pageid: int
+    user_id: str
+
+class UpdateArticleTags(BaseModel):
+    tags: List[str]
+    user_id: str
+
+
+def generate_tags_from_article(content: str) -> List[str]:
+    try:
+    
+        message = f"""
+        Select appropriate tags from the tags listed below given content and return in the form of a list:
+
+        Content: {content}
+
+        Tags: Technology, Self-Help, Market, Biography, Discovery, Inventions, Science, History, Geography, Love, Humor, Finance.
+        """
+        
+        
+        response = model.generate_content(message)
+        
+        
+        print(response.text)
+        tags = response.text.strip().split(",")  
+        tags = [tag.strip().replace('[', '').replace(']', '').replace("'", "").replace('"', "") for tag in tags]  
+        
+        return tags
+    except Exception as e:
+        print(e)
+        return ['Default']
+
+@app.get("/search/")  
 def search_wikipedia(keyword: str):
     url = "https://en.wikipedia.org/w/api.php"
-    params = {"action": "query", "list": "search", "srsearch": keyword, "format": "json"}
-    response = requests.get(url, params=params).json()
-    return response["query"]["search"]
+    params = {
+        "action": "query",
+        "list": "search",
+        "srsearch": keyword,
+        "format": "json",
+    }
+    response = requests.get(url, params=params)
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Wikipedia API error")
+    data = response.json()
+    return data.get("query", {}).get("search", [])
 
-# Save Article and Auto-tag
+
 @app.post("/articles/")
-def save_article(title: str, snippet: str, user_id: int, gemini: GeminiPro = Depends(GeminiPro)):
-    tags = gemini.tag_text(snippet)
-    session = SessionLocal()
-    article = Article(title=title, snippet=snippet, user_id=user_id, tags=", ".join(tags))
-    session.add(article)
-    session.commit()
-    return {"message": "Article saved with tags", "tags": tags}
+def save_article(article: ArticleCreate):
+    conn, cursor = get_db()
 
-# Get Saved Articles
-@app.get("/articles/")
-def get_articles(user_id: int):
-    session = SessionLocal()
-    articles = session.query(Article).filter(Article.user_id == user_id).all()
-    return articles
+    try:
+        
+        cursor.execute("SELECT * FROM users WHERE id = %s", (article.user_id,))
+        user = cursor.fetchone()
+        if not user:
+            cursor.execute("INSERT INTO users (id, name) VALUES (%s, %s)", (article.user_id, f"User-{article.user_id}"))
+            conn.commit()
 
-# Modify Tags
-@app.put("/articles/{article_id}/tags/")
-def update_tags(article_id: int, new_tags: str):
-    session = SessionLocal()
-    article = session.query(Article).get(article_id)
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
-    article.tags = new_tags
-    session.commit()
-    return {"message": "Tags updated"}
+        
+        cursor.execute("SELECT * FROM articles WHERE pageid = %s AND owner_id = %s", (article.pageid, article.user_id))
+        existing_article = cursor.fetchone()
+        if existing_article:
+            close_db(conn, cursor)
+            return {"message": f"Article '{existing_article[1]}' already exists for the user."}
+
+        
+        tags = generate_tags_from_article(article.snippet)
+        tags_json = json.dumps(tags)
+
+        cursor.execute(
+            "INSERT INTO articles (title, snippet, tags, pageid, owner_id) VALUES (%s, %s, %s, %s, %s) RETURNING *",
+            (article.title, article.snippet, tags_json, article.pageid, article.user_id)
+        )
+        conn.commit()
+        new_article = cursor.fetchone()
+
+        close_db(conn, cursor)
+        return {"message": "Article saved successfully", "article": new_article}
+
+    except Exception as e:
+        close_db(conn, cursor)
+        print(e)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/articles/{user_id}/")
+def get_saved_articles(user_id: str):
+    conn, cursor = get_db()
+
+    try:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor.execute("SELECT id, title, snippet, tags, pageid, owner_id FROM articles WHERE owner_id = %s", (user_id,))
+        articles = cursor.fetchall()
+
+        result = []
+        for article in articles:
+            print(article)
+            try:
+                tags = json.loads(article[3]) if isinstance(article[3], str) else article[3]
+            except json.JSONDecodeError:
+                tags = article[4]
+
+            result.append({
+                "pageid": article[4],
+                "title": article[1],
+                "snippet": article[2],
+                "tags": tags,
+                "owner_id": article[5],
+                "id": article[0],
+                "owner_name": user[1]
+            })
+        
+        close_db(conn, cursor)
+        print(result)
+        return result
+
+    except Exception as e:
+        print(e)
+        close_db(conn, cursor)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.put("/articles/{article_id}/")
+def update_article(article_id: int, request: UpdateArticleTags):
+    conn, cursor = get_db()
+
+    try:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (request.user_id,))
+        user = cursor.fetchone()
+        if not user:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor.execute("SELECT * FROM articles WHERE pageid = %s AND owner_id = %s", (article_id, request.user_id))
+        article = cursor.fetchone()
+        if not article:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="Article not found")
+
+        tags_json = json.dumps(request.tags)
+        cursor.execute("UPDATE articles SET tags = %s WHERE pageid = %s AND owner_id = %s RETURNING *", (tags_json, article_id, request.user_id))
+        conn.commit()
+        updated_article = cursor.fetchone()
+
+        close_db(conn, cursor)
+        return {"message": "Article updated successfully", "article": updated_article}
+
+    except Exception as e:
+        close_db(conn, cursor)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.delete("/articles/{user_id}/{article_id}/")
+def delete_article(user_id: str, article_id: int):
+    conn, cursor = get_db()
+
+    try:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor.execute("SELECT * FROM articles WHERE pageid = %s AND owner_id = %s", (article_id, user_id))
+        article = cursor.fetchone()
+        if not article:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="Article not found")
+
+        cursor.execute("DELETE FROM articles WHERE pageid = %s AND owner_id = %s", (article_id, user_id))
+        conn.commit()
+
+        close_db(conn, cursor)
+        return {"message": "Article deleted successfully"}
+
+    except Exception as e:
+        close_db(conn, cursor)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
