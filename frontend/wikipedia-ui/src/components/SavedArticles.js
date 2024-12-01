@@ -25,10 +25,10 @@ const SavedArticles = () => {
   const [editingTags, setEditingTags] = useState(null);
   const [newTags, setNewTags] = useState("");
   const [loading, setLoading] = useState({ delete: null, saveTags: null, fetch: false });
-  const [apiMessage, setApiMessage] = useState(""); // Message to show in Snackbar
-  const [openSnackbar, setOpenSnackbar] = useState(false); // Control Snackbar visibility
+  const [apiMessage, setApiMessage] = useState(""); 
+  const [openSnackbar, setOpenSnackbar] = useState(false); 
 
-  // Fetch saved articles only if the user is authenticated
+  
   const fetchSavedArticles = async () => {
     setLoading((prev) => ({ ...prev, fetch: true }));
     if (!isAuthenticated) {
@@ -84,7 +84,7 @@ const SavedArticles = () => {
       const updatedTags = newTags.split(",").map((tag) => tag.trim());
       await axios.put(
         `${process.env.REACT_APP_BACKEND_URL}/articles/${id}/`,
-        { tags: updatedTags, user_id: user?.sub },  // Send user_id along with tags
+        { tags: updatedTags, user_id: user?.sub },  
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -94,8 +94,8 @@ const SavedArticles = () => {
       setApiMessage("Tags updated successfully");
       setOpenSnackbar(true);
       fetchSavedArticles();
-      setNewTags(""); // Clear the tags input after saving
-      setEditingTags(null); // Exit editing mode
+      setNewTags(""); 
+      setEditingTags(null); 
     } catch (error) {
       console.error("Error updating tags:", error);
       setApiMessage("Error updating tags");
@@ -178,7 +178,7 @@ const SavedArticles = () => {
                         <IconButton
                           color="primary"
                           onClick={() => handleSaveTags(article.pageid)}
-                          disabled={loading.saveTags === article.pageid} // Disable while saving
+                          disabled={loading.saveTags === article.pageid} 
                         >
                           {loading.saveTags === article.pageid ? (
                             <CircularProgress size={24} />
@@ -201,7 +201,7 @@ const SavedArticles = () => {
                         <IconButton
                           color="error"
                           onClick={() => handleDelete(article.pageid)}
-                          disabled={loading.delete === article.pageid} // Disable while deleting
+                          disabled={loading.delete === article.pageid} 
                         >
                           {loading.delete === article.pageid ? (
                             <CircularProgress size={24} />

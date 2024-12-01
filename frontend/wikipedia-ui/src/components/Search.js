@@ -15,25 +15,25 @@ import {
   Alert,
 } from "@mui/material";
 import { Save } from "@mui/icons-material";
-import { useAuth0 } from "@auth0/auth0-react"; // Import the useAuth0 hook
+import { useAuth0 } from "@auth0/auth0-react"; 
 
 const Search = () => {
-  const { isAuthenticated, loginWithRedirect, logout, user } = useAuth0(); // Get authentication status and login function
+  const { isAuthenticated, loginWithRedirect, logout, user } = useAuth0(); 
 
-  const [keyword, setKeyword] = useState(""); // Keyword for search
-  const [results, setResults] = useState([]); // Search results
-  const [loading, setLoading] = useState(false); // Loading state
-  const [savedArticles, setSavedArticles] = useState(new Set()); // Track saved articles
-  const [apiMessage, setApiMessage] = useState(""); // Track API message
-  const [openSnackbar, setOpenSnackbar] = useState(false); // Snackbar visibility state
+  const [keyword, setKeyword] = useState(""); 
+  const [results, setResults] = useState([]); 
+  const [loading, setLoading] = useState(false); 
+  const [savedArticles, setSavedArticles] = useState(new Set()); 
+  const [apiMessage, setApiMessage] = useState(""); 
+  const [openSnackbar, setOpenSnackbar] = useState(false); 
 
-  // Use useEffect to fetch the search keyword from localStorage and initiate search after login
+  
   useEffect(() => {
     if (isAuthenticated) {
       const storedKeyword = localStorage.getItem("searchKeyword");
       if (storedKeyword) {
         setKeyword(storedKeyword);
-        handleSearch(storedKeyword); // Trigger search after login
+        handleSearch(storedKeyword); 
       }
     }
   }, [isAuthenticated]);
@@ -66,18 +66,18 @@ const Search = () => {
           title: article.title,
           snippet: article.snippet,
           pageid: article.pageid,
-          user_id: user?.sub, // Include the user ID (from Auth0's `sub` field)
+          user_id: user?.sub, 
         },
         {
           headers: {
-            Authorization: `Bearer ${user?.accessToken}`, // Include the Auth0 token
+            Authorization: `Bearer ${user?.accessToken}`, 
           },
         }
       );
 
       setApiMessage(response.data.message);
       setOpenSnackbar(true);
-      setSavedArticles((prevSaved) => new Set(prevSaved).add(article.pageid)); // Update saved articles state
+      setSavedArticles((prevSaved) => new Set(prevSaved).add(article.pageid)); 
     } catch (error) {
       console.error("Error saving article:", error);
       setApiMessage("Error saving article");
@@ -85,11 +85,11 @@ const Search = () => {
     }
   };
 
-  // Handle keyword change and trigger search
+  
   const handleKeywordChange = (e) => {
     const newKeyword = e.target.value;
     setKeyword(newKeyword);
-    localStorage.setItem("searchKeyword", newKeyword); // Save the keyword to localStorage
+    localStorage.setItem("searchKeyword", newKeyword); 
   };
 
   return (
@@ -112,7 +112,7 @@ const Search = () => {
           <Button
             variant="contained"
             color="primary"
-            onClick={() => handleSearch(keyword)} // Trigger search on button click
+            onClick={() => handleSearch(keyword)} 
             fullWidth
             disabled={!keyword || loading}
           >
@@ -153,7 +153,7 @@ const Search = () => {
                       color="primary"
                       onClick={() => handleSave(result)}
                       startIcon={<Save />}
-                      disabled={savedArticles.has(result.pageid)} // Disable if already saved
+                      disabled={savedArticles.has(result.pageid)} 
                     >
                       {savedArticles.has(result.pageid) ? "Saved" : "Save Article"}
                     </Button>
@@ -161,7 +161,7 @@ const Search = () => {
                     <Button
                       variant="outlined"
                       color="secondary"
-                      onClick={() => loginWithRedirect()} // Redirect to login page on click
+                      onClick={() => loginWithRedirect()} 
                     >
                       Log in to Save
                     </Button>

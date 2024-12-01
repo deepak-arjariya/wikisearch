@@ -31,17 +31,17 @@ const theme = createTheme({
 const App = () => {
   const { loginWithRedirect, logout, isAuthenticated, isLoading, user } = useAuth0();
 
-  // We no longer need the isRedirecting state to handle automatic login redirection
+  
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    // If the user is authenticated, we stop the redirect
+    
     if (!isLoading && isAuthenticated) {
       setIsRedirecting(false);
     }
   }, [isAuthenticated, isLoading]);
 
-  // Show loading spinner while the authentication status is being determined
+  
   if (isLoading || isRedirecting) {
     return <div>Loading...</div>;
   }
@@ -67,7 +67,6 @@ const App = () => {
                 Discover and Save Wikipedia Gems
               </Typography>
 
-              {/* Display 'Hi [user's name]' if authenticated */}
               {isAuthenticated && user && (
                 <Typography
                   variant="body1"
@@ -93,7 +92,6 @@ const App = () => {
               >
                 Search
               </Button>
-              {/* Show 'Saved Articles' only if user is authenticated */}
               {isAuthenticated && (
                 <Button
                   color="inherit"
@@ -121,7 +119,7 @@ const App = () => {
               ) : (
                 <Button
                   color="inherit"
-                  onClick={() => loginWithRedirect()} // Trigger login redirect only on button click
+                  onClick={() => loginWithRedirect()} 
                   sx={{
                     fontWeight: "bold",
                     "&:hover": { backgroundColor: "rgba(255,255,255,0.2)" },
@@ -134,11 +132,9 @@ const App = () => {
           </AppBar>
 
           <Container sx={{ mt: 4, flexGrow: 1 }}>
-            {/* Routes for authenticated users */}
             <Routes>
               <Route path="/" element={<Navigate to="/search" />} />
               <Route path="/search" element={<Search />} />
-              {/* Show SavedArticles page only if authenticated */}
               <Route
                 path="/saved"
                 element={

@@ -3,15 +3,16 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import json
+import os
 import requests
 from pydantic import BaseModel
 import google.generativeai as genai
 
-genai.configure(api_key="AIzaSyBsEmTENs2AscVJzRNooNtsVJxF8y4rnls")
+genai.configure(api_key=os.getenv('GENAI_KEY', ""))
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Configuration for CockroachDB
-DATABASE_URL = "postgresql://deepakarjairya:zOCVe9BX4_8e1vdOOmO43g@wikidb-5624.j77.aws-ap-south-1.cockroachlabs.cloud:26257/wikisearch?sslmode=verify-full"
+
+DATABASE_URL = os.getenv('DATABASE_URL', "")
 
 
 conn = psycopg2.connect(DATABASE_URL)
@@ -36,40 +37,40 @@ CREATE TABLE IF NOT EXISTS articles (
 );
 """
 
-# Execute the SQL commands to create tables
+
 cursor.execute(create_users_table)
 cursor.execute(create_articles_table)
 
-# Commit and close
+
 conn.commit()
 cursor.close()
 conn.close()
 
 print("Tables created successfully.")
 
-# FastAPI app
+
 app = FastAPI()
 
-# Middleware for CORS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace "*" with specific origins in production
+    allow_origins=["*"],  
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Utility function to get DB connection
+
 def get_db():
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
     return conn, cursor
 
-# Utility function to close DB connection
+
 def close_db(conn, cursor):
     cursor.close()
     conn.close()
 
-# Pydantic models
+
 class ArticleCreate(BaseModel):
     title: str
     snippet: str
@@ -80,10 +81,10 @@ class UpdateArticleTags(BaseModel):
     tags: List[str]
     user_id: str
 
-# Utility function to generate tags (dummy implementation)
+
 def generate_tags_from_article(content: str) -> List[str]:
     try:
-    # Define the message/prompt to pass to the model
+    
         message = f"""
         Select appropriate tags from the tags listed below given content and return in the form of a list:
 
@@ -92,20 +93,20 @@ def generate_tags_from_article(content: str) -> List[str]:
         Tags: Technology, Self-Help, Market, Biography, Discovery, Inventions, Science, History, Geography, Love, Humor, Finance.
         """
         
-        # Generate response from Gemini model
+        
         response = model.generate_content(message)
         
-        # Assuming the model returns a string with tags (e.g., "Technology, Science, Inventions")
+        
         print(response.text)
-        tags = response.text.strip().split(",")  # Splitting the response text into individual tags
-        tags = [tag.strip().replace('[', '').replace(']', '').replace("'", "").replace('"', "") for tag in tags]  # Cleaning up the tags
+        tags = response.text.strip().split(",")  
+        tags = [tag.strip().replace('[', '').replace(']', '').replace("'", "").replace('"', "") for tag in tags]  
         
         return tags
     except Exception as e:
         print(e)
         return ['Default']
 
-@app.get("/search/")  # Search Wikipedia Endpoint
+@app.get("/search/")  
 def search_wikipedia(keyword: str):
     url = "https://en.wikipedia.org/w/api.php"
     params = {
@@ -120,27 +121,27 @@ def search_wikipedia(keyword: str):
     data = response.json()
     return data.get("query", {}).get("search", [])
 
-# Save Article Endpoint
+
 @app.post("/articles/")
 def save_article(article: ArticleCreate):
     conn, cursor = get_db()
 
     try:
-        # Check if user exists, if not create a new one
+        
         cursor.execute("SELECT * FROM users WHERE id = %s", (article.user_id,))
         user = cursor.fetchone()
         if not user:
             cursor.execute("INSERT INTO users (id, name) VALUES (%s, %s)", (article.user_id, f"User-{article.user_id}"))
             conn.commit()
 
-        # Check if the article already exists for this user
+        
         cursor.execute("SELECT * FROM articles WHERE pageid = %s AND owner_id = %s", (article.pageid, article.user_id))
         existing_article = cursor.fetchone()
         if existing_article:
             close_db(conn, cursor)
             return {"message": f"Article '{existing_article[1]}' already exists for the user."}
 
-        # Generate tags and save the article
+        
         tags = generate_tags_from_article(article.snippet)
         tags_json = json.dumps(tags)
 
@@ -159,7 +160,6 @@ def save_article(article: ArticleCreate):
         print(e)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-# Get Saved Articles Endpoint
 @app.get("/articles/{user_id}/")
 def get_saved_articles(user_id: str):
     conn, cursor = get_db()
@@ -177,11 +177,10 @@ def get_saved_articles(user_id: str):
         result = []
         for article in articles:
             print(article)
-            # If tags are already a string, we don't need json.loads
             try:
                 tags = json.loads(article[3]) if isinstance(article[3], str) else article[3]
             except json.JSONDecodeError:
-                tags = article[4]  # If tags can't be parsed, treat as a plain string
+                tags = article[4]
 
             result.append({
                 "pageid": article[4],
@@ -202,7 +201,6 @@ def get_saved_articles(user_id: str):
         close_db(conn, cursor)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-# Update Article Tags Endpoint
 @app.put("/articles/{article_id}/")
 def update_article(article_id: int, request: UpdateArticleTags):
     conn, cursor = get_db()
@@ -232,7 +230,7 @@ def update_article(article_id: int, request: UpdateArticleTags):
         close_db(conn, cursor)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-# Delete Article Endpoint
+
 @app.delete("/articles/{user_id}/{article_id}/")
 def delete_article(user_id: str, article_id: int):
     conn, cursor = get_db()
