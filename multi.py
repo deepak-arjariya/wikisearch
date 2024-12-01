@@ -5,9 +5,14 @@ from typing import List
 import json
 import requests
 from pydantic import BaseModel
+import google.generativeai as genai
+
+genai.configure(api_key="AIzaSyBsEmTENs2AscVJzRNooNtsVJxF8y4rnls")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Configuration for CockroachDB
 DATABASE_URL = "postgresql://deepakarjairya:zOCVe9BX4_8e1vdOOmO43g@wikidb-5624.j77.aws-ap-south-1.cockroachlabs.cloud:26257/wikisearch?sslmode=verify-full"
+
 
 conn = psycopg2.connect(DATABASE_URL)
 cursor = conn.cursor()
@@ -77,7 +82,28 @@ class UpdateArticleTags(BaseModel):
 
 # Utility function to generate tags (dummy implementation)
 def generate_tags_from_article(content: str) -> List[str]:
-    return ["knowledge", "testing"]
+    try:
+    # Define the message/prompt to pass to the model
+        message = f"""
+        Select appropriate tags from the tags listed below given content and return in the form of a list:
+
+        Content: {content}
+
+        Tags: Technology, Self-Help, Market, Biography, Discovery, Inventions, Science, History, Geography, Love, Humor, Finance.
+        """
+        
+        # Generate response from Gemini model
+        response = model.generate_content(message)
+        
+        # Assuming the model returns a string with tags (e.g., "Technology, Science, Inventions")
+        print(response.text)
+        tags = response.text.strip().split(",")  # Splitting the response text into individual tags
+        tags = [tag.strip().replace('[', '').replace(']', '').replace("'", "").replace('"', "") for tag in tags]  # Cleaning up the tags
+        
+        return tags
+    except Exception as e:
+        print(e)
+        return ['Default']
 
 @app.get("/search/")  # Search Wikipedia Endpoint
 def search_wikipedia(keyword: str):
