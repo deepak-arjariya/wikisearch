@@ -1,29 +1,46 @@
+import psycopg2
 from fastapi import FastAPI, HTTPException, Depends
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, create_engine, UniqueConstraint
-from sqlalchemy.orm import relationship, Mapped, mapped_column
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
 from fastapi.middleware.cors import CORSMiddleware
-from jose import JWTError, jwt
-from fastapi.security import OAuth2PasswordBearer
 from typing import List
 import json
 import requests
 from pydantic import BaseModel
 
-# Configuration
-DATABASE_URL = "sqlite:///./articles.db"  # Replace with your production DB URL
-AUTH0_DOMAIN = "dev-vvk6ffsi4ip5unr2.us.auth0.com"  # Replace with your Auth0 domain
-API_AUDIENCE = "https://dev-vvk6ffsi4ip5unr2.us.auth0.com/api/v2/"  # Replace with your Auth0 API audience
-ALGORITHMS = ["RS256", "dir"]  # Support both RS256 and dir algorithms
+# Configuration for CockroachDB
+DATABASE_URL = "postgresql://deepakarjairya:zOCVe9BX4_8e1vdOOmO43g@wikidb-5624.j77.aws-ap-south-1.cockroachlabs.cloud:26257/defaultdb?sslmode=verify-full"
 
-# Shared Secret Key for "dir" algorithm
-SHARED_SECRET_KEY = "your_shared_secret_key_here"  # Replace this with your actual shared secret key
+conn = psycopg2.connect(DATABASE_URL)
+cursor = conn.cursor()
 
-# Database setup
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+create_users_table = """
+CREATE TABLE IF NOT EXISTS users (
+    id STRING PRIMARY KEY,
+    name STRING
+);
+"""
+
+create_articles_table = """
+CREATE TABLE IF NOT EXISTS articles (
+    id SERIAL PRIMARY KEY,
+    title STRING NOT NULL,
+    snippet STRING NOT NULL,
+    tags STRING,
+    pageid INT NOT NULL,
+    owner_id STRING REFERENCES users(id),
+    UNIQUE (pageid, owner_id)
+);
+"""
+
+# Execute the SQL commands to create tables
+cursor.execute(create_users_table)
+cursor.execute(create_articles_table)
+
+# Commit and close
+conn.commit()
+cursor.close()
+conn.close()
+
+print("Tables created successfully.")
 
 # FastAPI app
 app = FastAPI()
@@ -36,98 +53,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Dependency to get DB session
+# Utility function to get DB connection
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    return conn, cursor
 
-# OAuth2 Configuration
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    try:
-        # Get the unverified header to check the algorithm
-        unverified_header = jwt.get_unverified_header(token)
-        print(f"unverified header {unverified_header}")
-        
-        # Check the algorithm used
-        if unverified_header["alg"] == "dir":
-            # Use the shared secret key to decode the token
-            payload = jwt.decode(
-                token,
-                SHARED_SECRET_KEY,
-                algorithms=["dir"],
-                audience=API_AUDIENCE,
-                issuer=f"https://{AUTH0_DOMAIN}/"
-            )
-            return payload
-        
-        # If algorithm is RS256, fetch keys from Auth0
-        rsa_key = {}
-        jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-        jwks_response = requests.get(jwks_url).json()
-        for key in jwks_response["keys"]:
-            if key["kid"] == unverified_header["kid"]:
-                rsa_key = {
-                    "kty": key["kty"],
-                    "kid": key["kid"],
-                    "use": key["use"],
-                    "n": key["n"],
-                    "e": key["e"]
-                }
-        if rsa_key:
-            payload = jwt.decode(
-                token,
-                rsa_key,
-                algorithms=ALGORITHMS,
-                audience=API_AUDIENCE,
-                issuer=f"https://{AUTH0_DOMAIN}/"
-            )
-            return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-
-# Define User model
-class User(Base):
-    __tablename__ = "users"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    auth0_id: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
-    articles: Mapped[list["Article"]] = relationship("Article", back_populates="owner")
-
-# Define Article model
-class Article(Base):
-    __tablename__ = "articles"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    pageid: Mapped[int] = mapped_column(Integer, nullable=False)
-    title: Mapped[str] = mapped_column(String, nullable=False)
-    snippet: Mapped[str] = mapped_column(String, nullable=False)
-    tags: Mapped[str] = mapped_column(String, nullable=True)  # This could also be JSON if needed
-    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
-    owner: Mapped["User"] = relationship("User", back_populates="articles")
-
-    __table_args__ = (UniqueConstraint('pageid', 'owner_id', name='unique_pageid_per_user'),)
-
-Base.metadata.create_all(bind=engine)
-
-# Utility function to generate tags from OpenAI (dummy implementation)
-def generate_tags_from_article(content: str) -> List[str]:
-    return ["knowledge", "testing"]
+# Utility function to close DB connection
+def close_db(conn, cursor):
+    cursor.close()
+    conn.close()
 
 # Pydantic models
-# Pydantic models should not inherit from SQLAlchemy's Base
-class ArticleCreate(BaseModel):  # Correct this by using BaseModel instead of Base
+class ArticleCreate(BaseModel):
     title: str
     snippet: str
     pageid: int
+    user_id: str
 
 class UpdateArticleTags(BaseModel):
     tags: List[str]
+    user_id: str
 
+# Utility function to generate tags (dummy implementation)
+def generate_tags_from_article(content: str) -> List[str]:
+    return ["knowledge", "testing"]
 
-@app.get("/search/")
+@app.get("/search/")  # Search Wikipedia Endpoint
 def search_wikipedia(keyword: str):
     url = "https://en.wikipedia.org/w/api.php"
     params = {
@@ -144,78 +96,140 @@ def search_wikipedia(keyword: str):
 
 # Save Article Endpoint
 @app.post("/articles/")
-def save_article(
-    article: ArticleCreate, 
-    db: Session = Depends(get_db), 
-    current_user: dict = Depends(get_current_user)
-):
-    # Get or create user in the database
-    auth0_id = current_user["sub"]
-    user = db.query(User).filter(User.auth0_id == auth0_id).first()
-    if not user:
-        user = User(auth0_id=auth0_id)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+def save_article(article: ArticleCreate):
+    conn, cursor = get_db()
 
-    # Check if the article already exists for this user
-    existing_article = db.query(Article).filter(
-        Article.pageid == article.pageid, 
-        Article.owner_id == user.id
-    ).first()
-    if existing_article:
-        return {"message": f"Article '{existing_article.title}' already exists for the user."}
+    try:
+        # Check if user exists, if not create a new one
+        cursor.execute("SELECT * FROM users WHERE id = %s", (article.user_id,))
+        user = cursor.fetchone()
+        if not user:
+            cursor.execute("INSERT INTO users (id, name) VALUES (%s, %s)", (article.user_id, f"User-{article.user_id}"))
+            conn.commit()
 
-    # Generate tags and save the article
-    tags = generate_tags_from_article(article.snippet)
-    tags_json = json.dumps(tags)
-    new_article = Article(
-        title=article.title,
-        snippet=article.snippet,
-        tags=tags_json,
-        pageid=article.pageid,
-        owner_id=user.id,
-    )
-    db.add(new_article)
-    db.commit()
-    db.refresh(new_article)
-    return {"message": "Article saved successfully", "article": new_article}
+        # Check if the article already exists for this user
+        cursor.execute("SELECT * FROM articles WHERE pageid = %s AND owner_id = %s", (article.pageid, article.user_id))
+        existing_article = cursor.fetchone()
+        if existing_article:
+            close_db(conn, cursor)
+            return {"message": f"Article '{existing_article[1]}' already exists for the user."}
+
+        # Generate tags and save the article
+        tags = generate_tags_from_article(article.snippet)
+        tags_json = json.dumps(tags)
+
+        cursor.execute(
+            "INSERT INTO articles (title, snippet, tags, pageid, owner_id) VALUES (%s, %s, %s, %s, %s) RETURNING *",
+            (article.title, article.snippet, tags_json, article.pageid, article.user_id)
+        )
+        conn.commit()
+        new_article = cursor.fetchone()
+
+        close_db(conn, cursor)
+        return {"message": "Article saved successfully", "article": new_article}
+
+    except Exception as e:
+        close_db(conn, cursor)
+        print(e)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # Get Saved Articles Endpoint
-@app.get("/articles/")
-def get_saved_articles(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    auth0_id = current_user["sub"]
-    user = db.query(User).filter(User.auth0_id == auth0_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    articles = db.query(Article).filter(Article.owner_id == user.id).all()
-    return [{"pageid": article.pageid, "title": article.title, "snippet": article.snippet, "tags": json.loads(article.tags)} for article in articles]
+@app.get("/articles/{user_id}/")
+def get_saved_articles(user_id: str):
+    conn, cursor = get_db()
+
+    try:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor.execute("SELECT id, title, snippet, tags, pageid, owner_id FROM articles WHERE owner_id = %s", (user_id,))
+        articles = cursor.fetchall()
+
+        result = []
+        for article in articles:
+            print(article)
+            # If tags are already a string, we don't need json.loads
+            try:
+                tags = json.loads(article[3]) if isinstance(article[3], str) else article[3]
+            except json.JSONDecodeError:
+                tags = article[4]  # If tags can't be parsed, treat as a plain string
+
+            result.append({
+                "pageid": article[4],
+                "title": article[1],
+                "snippet": article[2],
+                "tags": tags,
+                "owner_id": article[5],
+                "id": article[0],
+                "owner_name": user[1]
+            })
+        
+        close_db(conn, cursor)
+        print(result)
+        return result
+
+    except Exception as e:
+        print(e)
+        close_db(conn, cursor)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # Update Article Tags Endpoint
 @app.put("/articles/{article_id}/")
-def update_article(article_id: int, request: UpdateArticleTags, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    auth0_id = current_user["sub"]
-    user = db.query(User).filter(User.auth0_id == auth0_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    article = db.query(Article).filter(Article.id == article_id, Article.owner_id == user.id).first()
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
-    article.tags = json.dumps(request.tags)
-    db.commit()
-    db.refresh(article)
-    return {"message": "Article updated successfully", "article": article}
+def update_article(article_id: int, request: UpdateArticleTags):
+    conn, cursor = get_db()
+
+    try:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (request.user_id,))
+        user = cursor.fetchone()
+        if not user:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor.execute("SELECT * FROM articles WHERE pageid = %s AND owner_id = %s", (article_id, request.user_id))
+        article = cursor.fetchone()
+        if not article:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="Article not found")
+
+        tags_json = json.dumps(request.tags)
+        cursor.execute("UPDATE articles SET tags = %s WHERE pageid = %s AND owner_id = %s RETURNING *", (tags_json, article_id, request.user_id))
+        conn.commit()
+        updated_article = cursor.fetchone()
+
+        close_db(conn, cursor)
+        return {"message": "Article updated successfully", "article": updated_article}
+
+    except Exception as e:
+        close_db(conn, cursor)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # Delete Article Endpoint
-@app.delete("/articles/{article_id}/")
-def delete_article(article_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    auth0_id = current_user["sub"]
-    user = db.query(User).filter(User.auth0_id == auth0_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    article = db.query(Article).filter(Article.id == article_id, Article.owner_id == user.id).first()
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
-    db.delete(article)
-    db.commit()
-    return {"message": "Article deleted successfully"}
+@app.delete("/articles/{user_id}/{article_id}/")
+def delete_article(user_id: str, article_id: int):
+    conn, cursor = get_db()
+
+    try:
+        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cursor.execute("SELECT * FROM articles WHERE pageid = %s AND owner_id = %s", (article_id, user_id))
+        article = cursor.fetchone()
+        if not article:
+            close_db(conn, cursor)
+            raise HTTPException(status_code=404, detail="Article not found")
+
+        cursor.execute("DELETE FROM articles WHERE pageid = %s AND owner_id = %s", (article_id, user_id))
+        conn.commit()
+
+        close_db(conn, cursor)
+        return {"message": "Article deleted successfully"}
+
+    except Exception as e:
+        close_db(conn, cursor)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
